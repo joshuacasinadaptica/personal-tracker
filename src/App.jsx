@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 
-// ── CONSTANTS ────────────────────────────────────────────────────────────────
+// ── CONSTANTS (light & lively) ────────────────────────────────────────────────
 const C = {
-  bg:"#0A0F1E", card:"#111827", card2:"#1A2235", border:"#1E2D45",
-  green:"#00F5A0", green2:"#00C47D", blue:"#3B82F6", purple:"#8B5CF6",
-  red:"#F87171", yellow:"#FBBF24", text:"#F0F6FF", muted:"#5A7090",
-  orange:"#FB923C",
+  bg:"#F0F4FF", card:"#FFFFFF", card2:"#F1F5F9", border:"#E2E8F0",
+  green:"#059669", green2:"#047857", blue:"#1A56DB", purple:"#7C3AED",
+  red:"#DC2626", yellow:"#D97706", orange:"#EA580C",
+  text:"#0D1B4B", muted:"#64748B",
+  greenSoft:"#ECFDF5", blueSoft:"#EEF2FF", purpleSoft:"#F5F3FF", yellowSoft:"#FFFBEB", redSoft:"#FEF2F2",
+  shadow:"0 2px 12px rgba(26,86,219,.08)", shadowMd:"0 4px 24px rgba(26,86,219,.12)",
 };
 const NS = "chief3_";
 const save = (k,v) => { try{localStorage.setItem(NS+k,JSON.stringify(v))}catch{} };
@@ -166,6 +168,39 @@ const DEF_CUTOFFS = {
   ]},
 };
 const DEF_PAY = {"15th":{},"30th":{}};
+
+// ── MONTH (bills per calendar month) ─────────────────────────────────────────
+const getMonthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+const monthLabel = (key) => {
+  if(!key||!key.match(/^\d{4}-\d{2}$/)) return key||"";
+  const [y,m] = key.split("-").map(Number);
+  const d = new Date(y, m - 1, 1);
+  return d.toLocaleDateString("en-PH",{month:"long",year:"numeric"});
+};
+const prevMonthKey = (key) => {
+  const [y,m] = key.split("-").map(Number);
+  if(m===1) return `${y-1}-12`;
+  return `${y}-${String(m-1).padStart(2,"0")}`;
+};
+const nextMonthKey = (key) => {
+  const [y,m] = key.split("-").map(Number);
+  if(m===12) return `${y+1}-01`;
+  return `${y}-${String(m+1).padStart(2,"0")}`;
+};
+function getPayForMonth(pay, monthKey) {
+  if(!monthKey) return DEF_PAY;
+  const m = pay[monthKey];
+  if(m&&typeof m==="object"&&("15th" in m || "30th" in m)) return m;
+  return DEF_PAY;
+}
+function migratePayToMonthKeyed(loaded) {
+  if(!loaded||typeof loaded!=="object") return { [getMonthKey()]: DEF_PAY };
+  const hasOld = "15th" in loaded && "30th" in loaded;
+  const hasMonthKey = Object.keys(loaded).some(k=>/^\d{4}-\d{2}$/.test(k));
+  if(hasOld&&!hasMonthKey) return { [getMonthKey()]: loaded };
+  return loaded;
+}
+
 const DEF_LOANS = [
   {id:"l1",name:"Car Loan — Geely",total:936000,monthly:15600,paid:468000,color:C.blue,notes:"Geely Azkarra"},
   {id:"l2",name:"BPI Personal Loan",total:70752,monthly:1965.33,paid:21618.63,color:C.purple,notes:""},
@@ -190,19 +225,19 @@ const DEF_SAV_HIST = [
 
 // ── UI PRIMITIVES ─────────────────────────────────────────────────────────────
 const Card = ({children,style={}}) => (
-  <div style={{background:C.card,borderRadius:20,padding:18,border:`1px solid ${C.border}`,...style}}>{children}</div>
+  <div style={{background:C.card,borderRadius:18,padding:16,boxShadow:C.shadow,border:`1px solid ${C.border}`,...style}}>{children}</div>
 );
 const Row = ({label,children,mb=14}) => (
   <div style={{marginBottom:mb}}>
-    <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.8}}>{label}</div>
+    <div style={{fontSize:11,color:C.muted,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
     {children}
   </div>
 );
 const Inp = ({label,...p}) => (
   <Row label={label} mb={p.mb||14}>
-    <input {...p} style={{width:"100%",background:C.card2,border:`1.5px solid ${C.border}`,borderRadius:12,
+    <input {...p} style={{width:"100%",background:C.bg,border:`1.5px solid ${C.border}`,borderRadius:12,
       padding:"12px 14px",color:C.text,fontSize:14,outline:"none",...p.style}}
-      onFocus={e=>e.target.style.borderColor=C.green}
+      onFocus={e=>e.target.style.borderColor=C.blue}
       onBlur={e=>e.target.style.borderColor=C.border}/>
   </Row>
 );
@@ -212,25 +247,25 @@ const ProgressBar = ({pct,color=C.green,h=8}) => (
   </div>
 );
 const Badge = ({label,color,bg}) => (
-  <span style={{fontSize:10,background:bg||color+"22",color,padding:"3px 10px",borderRadius:20,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,flexShrink:0}}>{label}</span>
+  <span style={{fontSize:10,background:bg||color+"22",color,padding:"3px 10px",borderRadius:20,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,flexShrink:0,border:`1px solid ${color}44`}}>{label}</span>
 );
 
 const Modal = ({onClose,title,children}) => (
   <div onClick={e=>e.target===e.currentTarget&&onClose()}
-    style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",display:"flex",
-      alignItems:"flex-end",justifyContent:"center",zIndex:300,backdropFilter:"blur(6px)"}}>
+    style={{position:"fixed",inset:0,background:"rgba(13,27,75,.25)",display:"flex",
+      alignItems:"flex-end",justifyContent:"center",zIndex:300,backdropFilter:"blur(8px)"}}>
     <div className="modal-enter" style={{width:"100%",maxWidth:430,background:C.card,
       borderRadius:"24px 24px 0 0",padding:"24px 20px 48px",maxHeight:"90vh",overflowY:"auto",
-      border:`1px solid ${C.border}`}}>
+      boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
       <div style={{width:36,height:4,background:C.border,borderRadius:99,margin:"0 auto 20px"}}/>
       <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:18}}>{title}</div>
       {children}
     </div>
   </div>
 );
-const BtnPrimary = ({onClick,children,color=C.green,style={}}) => (
+const BtnPrimary = ({onClick,children,color=C.blue,style={}}) => (
   <button onClick={onClick} style={{width:"100%",padding:14,borderRadius:14,border:"none",
-    background:color,color:color===C.green?"#0A0F1E":C.text,fontSize:14,fontWeight:800,...style}}>{children}</button>
+    background:color,color:"#fff",fontSize:14,fontWeight:700,...style}}>{children}</button>
 );
 const BtnSecondary = ({onClick,children}) => (
   <button onClick={onClick} style={{width:"100%",padding:13,borderRadius:14,border:`1.5px solid ${C.border}`,
@@ -241,7 +276,7 @@ const ColorPicker = ({value,onChange}) => (
     <div style={{display:"flex",gap:10}}>
       {[C.green,C.blue,C.purple,C.red,C.yellow,C.orange].map(c=>(
         <button key={c} onClick={()=>onChange(c)} style={{width:32,height:32,borderRadius:"50%",background:c,
-          border:`3px solid ${value===c?"#fff":"transparent"}`}}/>
+          border:`3px solid ${value===c?C.text:"transparent"}`}}/>
       ))}
     </div>
   </Row>
@@ -274,7 +309,6 @@ const BarChart = ({history}) => {
   return(
     <div style={{overflowX:"auto"}}>
       <svg width={Math.max(320,history.length*90)} height={160} style={{display:"block"}}>
-        {/* Grid lines */}
         {[0,.25,.5,.75,1].map(p=>(
           <g key={p}>
             <line x1={0} y1={130-p*110} x2={Math.max(320,history.length*90)} y2={130-p*110}
@@ -289,17 +323,16 @@ const BarChart = ({history}) => {
           const sH=(Math.max(h.saved,0)/maxVal)*110;
           return(
             <g key={h.id}>
-              <rect x={x} y={130-iH} width={barW} height={iH} rx={4} fill={C.blue} opacity={.7}/>
-              <rect x={x+barW+3} y={130-eH} width={barW} height={eH} rx={4} fill={C.red} opacity={.7}/>
-              <rect x={x+barW*2+6} y={130-sH} width={barW} height={sH} rx={4} fill={C.green} opacity={.9}/>
+              <rect x={x} y={130-iH} width={barW} height={iH} rx={4} fill={C.blue}/>
+              <rect x={x+barW+3} y={130-eH} width={barW} height={eH} rx={4} fill={C.red}/>
+              <rect x={x+barW*2+6} y={130-sH} width={barW} height={sH} rx={4} fill={C.green}/>
               <text x={x+barW} y={148} textAnchor="middle" fill={C.muted} fontSize={9}>{h.month.replace(" 20","'")}</text>
             </g>
           );
         })}
-        {/* Legend */}
-        <rect x={50} y={155} width={8} height={8} rx={2} fill={C.blue} opacity={.7}/>
+        <rect x={50} y={155} width={8} height={8} rx={2} fill={C.blue}/>
         <text x={62} y={163} fill={C.muted} fontSize={9}>Income</text>
-        <rect x={110} y={155} width={8} height={8} rx={2} fill={C.red} opacity={.7}/>
+        <rect x={110} y={155} width={8} height={8} rx={2} fill={C.red}/>
         <text x={122} y={163} fill={C.muted} fontSize={9}>Expenses</text>
         <rect x={175} y={155} width={8} height={8} rx={2} fill={C.green}/>
         <text x={187} y={163} fill={C.muted} fontSize={9}>Saved</text>
@@ -370,12 +403,14 @@ function buildPrompt(co,pay,loans,goals,invest,savHist) {
 export default function App() {
   const [tab,setTab]     = useState("home");
   const [co,setCo]       = useState(()=>load("cutoffs",DEF_CUTOFFS));
-  const [pay,setPay]     = useState(()=>load("payments",DEF_PAY));
+  const [pay,setPay]     = useState(()=>migratePayToMonthKeyed(load("payments",null))||{[getMonthKey()]:DEF_PAY});
   const [loans,setLoans] = useState(()=>load("loans",DEF_LOANS));
   const [goals,setGoals] = useState(()=>load("goals",DEF_GOALS));
   const [invest,setInvest]= useState(()=>load("invest",DEF_INVEST));
   const [savHist,setSavHist]=useState(()=>load("savhist",DEF_SAV_HIST));
   const [coTab,setCoTab] = useState("15th");
+  const [billMonth,setBillMonth] = useState(()=>getMonthKey());
+  const [confirmNextMonth,setConfirmNextMonth] = useState(null); // { fromMonthKey } when asking "done with this month?"
   const [tipsOpen,setTipsOpen]=useState(false);
   const [activeTip,setActiveTip]=useState(null);
   const [copied,setCopied]=useState(false);
@@ -407,10 +442,12 @@ export default function App() {
   useEffect(()=>save("invest",invest),[invest]);
   useEffect(()=>save("savhist",savHist),[savHist]);
 
-  const tips = useMemo(()=>generateTips(co,pay,loans,goals,invest,savHist),[co,pay,loans,goals,invest,savHist]);
+  const currentMonthPay = getPayForMonth(pay, getMonthKey());
+  const tips = useMemo(()=>generateTips(co,currentMonthPay,loans,goals,invest,savHist),[co,pay,loans,goals,invest,savHist]);
 
-  const stats = key => {
-    const c=co[key]; const p=pay[key]||{};
+  const stats = (key, monthKey) => {
+    const monthPay = getPayForMonth(pay, monthKey ?? getMonthKey());
+    const c=co[key]; const p=monthPay[key]||{};
     const budget=c.items.reduce((s,i)=>s+i.budget,0);
     const paidI=c.items.filter(i=>p[i.id]?.done);
     const paidTot=paidI.reduce((s,i)=>s+(p[i.id]?.amount||i.budget),0);
@@ -423,21 +460,20 @@ export default function App() {
   const totalSaved=goals.reduce((s,g)=>s+g.current,0);
   const totalInvest=invest.reduce((s,i)=>s+i.currentValue,0);
   const netWorth=totalSaved+totalInvest-totalDebt;
-  const promptText=buildPrompt(co,pay,loans,goals,invest,savHist);
+  const promptText=buildPrompt(co,currentMonthPay,loans,goals,invest,savHist);
   const savRate=((totalIncome-totalExpenses)/totalIncome*100).toFixed(1);
 
-  // ── MARK PAID — with auto-sync ─────────────────────────────────────────────
+  // ── MARK PAID — with auto-sync (uses billMonth) ─────────────────────────────
   const markPaid = () => {
     if(!paidModal) return;
     const {key,item} = paidModal;
     const amount = parseFloat(paidAmt)||item.budget;
-    // 1. Mark payment
-    setPay(p=>({...p,[key]:{...p[key],[item.id]:{done:true,amount,date:paidDate}}}));
-    // 2. Auto-sync: if loan, add to loan.paid
+    const monthKey = billMonth;
+    const monthPay = getPayForMonth(pay, monthKey);
+    setPay(prev=>({...prev,[monthKey]:{...monthPay,[key]:{...monthPay[key],[item.id]:{done:true,amount,date:paidDate}}}}));
     if(item.cat==="loan" && item.loanLink) {
       setLoans(p=>p.map(l=>l.id===item.loanLink?{...l,paid:Math.min(l.paid+amount,l.total)}:l));
     }
-    // 3. Auto-sync: if savings, add to goal.current
     if(item.cat==="savings" && item.goalLink) {
       setGoals(p=>p.map(g=>g.id===item.goalLink?{...g,current:g.current+amount}:g));
     }
@@ -445,19 +481,19 @@ export default function App() {
   };
 
   const unmark = (key,id) => {
-    const item=co[key].items.find(i=>i.id===id);
-    const paidRecord=pay[key]?.[id];
+    const monthPay = getPayForMonth(pay, billMonth);
+    const paidRecord = monthPay[key]?.[id];
+    const item = co[key].items.find(i=>i.id===id);
     if(item&&paidRecord) {
-      // Reverse loan sync
       if(item.cat==="loan"&&item.loanLink) {
         setLoans(p=>p.map(l=>l.id===item.loanLink?{...l,paid:Math.max(l.paid-(paidRecord.amount||item.budget),0)}:l));
       }
-      // Reverse savings sync
       if(item.cat==="savings"&&item.goalLink) {
         setGoals(p=>p.map(g=>g.id===item.goalLink?{...g,current:Math.max(g.current-(paidRecord.amount||item.budget),0)}:g));
       }
     }
-    setPay(p=>({...p,[key]:{...p[key],[id]:{done:false}}}));
+    const nextMonthPay = {...monthPay,[key]:{...monthPay[key],[id]:{done:false}}};
+    setPay(prev=>({...prev,[billMonth]:nextMonthPay}));
   };
 
   const saveBill = () => {
@@ -470,7 +506,9 @@ export default function App() {
   };
   const deleteBill=(key,id)=>{
     setCo(p=>({...p,[key]:{...p[key],items:p[key].items.filter(i=>i.id!==id)}}));
-    setPay(p=>{const np={...p[key]};delete np[id];return{...p,[key]:np}});
+    const monthPay = getPayForMonth(pay, billMonth);
+    const nextCutoff = {...monthPay[key]}; delete nextCutoff[id];
+    setPay(prev=>({...prev,[billMonth]:{...monthPay,[key]:nextCutoff}}));
   };
   const saveLoan=()=>{
     if(!loanForm.name||!loanForm.total)return;
@@ -514,21 +552,27 @@ export default function App() {
     <div style={{maxWidth:430,margin:"0 auto",height:"100vh",display:"flex",flexDirection:"column",
       background:C.bg,overflow:"hidden",position:"relative"}}>
 
-      {/* Header */}
-      <div style={{background:C.bg,padding:"14px 20px 12px",display:"flex",justifyContent:"space-between",
-        alignItems:"center",borderBottom:`1px solid ${C.border}`,flexShrink:0,position:"sticky",top:0,zIndex:10}}>
-        <div style={{fontFamily:"'Space Mono',monospace",fontSize:13,color:C.muted}}>
+      {/* Header — time | chief (yellow bolt, black text) | date */}
+      <div style={{background:C.card,padding:"14px 20px 12px",display:"flex",justifyContent:"space-between",
+        alignItems:"center",borderBottom:`1px solid ${C.border}`,flexShrink:0,position:"sticky",top:0,zIndex:10,boxShadow:C.shadow}}>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:C.text}}>
           {new Date().toLocaleTimeString("en-PH",{hour:"2-digit",minute:"2-digit"})}
         </div>
-        <div style={{fontSize:16,fontWeight:800,color:C.green,letterSpacing:2,fontFamily:"'Space Mono',monospace"}}>⚡ CHIEF</div>
-        {/* TIPS button */}
-        <button onClick={()=>setTipsOpen(true)} style={{background:criticalTips>0?C.red+"22":C.card2,border:`1.5px solid ${criticalTips>0?C.red:C.border}`,
-          borderRadius:20,padding:"6px 14px",display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:12}}>💡</span>
-          <span style={{fontSize:11,fontWeight:700,color:criticalTips>0?C.red:C.muted}}>Tips</span>
-          {criticalTips>0&&<span style={{background:C.red,color:"#fff",borderRadius:"50%",width:16,height:16,
-            fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{criticalTips}</span>}
-        </button>
+        <div style={{fontSize:16,fontWeight:700,color:C.text,letterSpacing:1,fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:20,display:"inline-block",filter:"sepia(1) saturate(4) hue-rotate(15deg)"}}>⚡</span> chief
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:C.muted}}>
+            {new Date().toLocaleDateString("en-PH",{month:"short",day:"numeric"})}
+          </div>
+          <button onClick={()=>setTipsOpen(true)} style={{background:criticalTips>0?C.redSoft:C.bg,border:`1.5px solid ${criticalTips>0?C.red:C.border}`,
+            borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:12}}>💡</span>
+            <span style={{fontSize:11,fontWeight:700,color:criticalTips>0?C.red:C.muted}}>Tips</span>
+            {criticalTips>0&&<span style={{background:C.red,color:"#fff",borderRadius:"50%",width:16,height:16,
+              fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{criticalTips}</span>}
+          </button>
+        </div>
       </div>
 
       {/* Scroll */}
@@ -539,94 +583,73 @@ export default function App() {
           {tab==="home"&&(
             <div className="anim">
               <div style={{padding:"20px 0 16px"}}>
-                <div style={{fontSize:12,color:C.muted,fontFamily:"'Space Mono',monospace"}}>
-                  {new Date().toLocaleDateString("en-PH",{weekday:"long",month:"long",day:"numeric"})}
+                <div style={{fontSize:12,color:C.muted,fontFamily:"'DM Sans',sans-serif"}}>
+                  {new Date().toLocaleDateString("en-PH",{weekday:"long",month:"long",day:"numeric",year:"numeric"})}
                 </div>
-                <div style={{fontSize:24,fontWeight:800,color:C.text,marginTop:4,lineHeight:1.2}}>
-                  Your money,<br/><span style={{color:C.green}}>working for you.</span>
-                </div>
-              </div>
-
-              {/* Net worth card */}
-              <div style={{background:`linear-gradient(135deg,#0D2137,#0A1628)`,borderRadius:24,
-                padding:22,marginBottom:16,border:`1px solid ${C.green}33`,
-                boxShadow:`0 0 40px ${C.green}10`}}>
-                <div style={{fontSize:10,color:C.green,fontWeight:700,letterSpacing:2,marginBottom:6,fontFamily:"'Space Mono',monospace"}}>NET WORTH</div>
-                <div style={{fontSize:36,fontWeight:800,color:netWorth>=0?C.green:C.red,fontFamily:"'Space Mono',monospace"}}>
-                  ₱{fmt(netWorth)}
-                </div>
-                <div style={{display:"flex",gap:20,marginTop:14}}>
-                  {[{l:"Assets",v:totalSaved+totalInvest,c:C.green},{l:"Debt",v:totalDebt,c:C.red}].map((s,i)=>(
-                    <div key={i}>
-                      <div style={{fontSize:10,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{s.l}</div>
-                      <div style={{fontSize:16,fontWeight:700,color:s.c}}>₱{fmt(s.v)}</div>
-                    </div>
-                  ))}
-                  <div>
-                    <div style={{fontSize:10,color:C.muted,fontFamily:"'Space Mono',monospace"}}>SAV RATE</div>
-                    <div style={{fontSize:16,fontWeight:700,color:parseFloat(savRate)>=20?C.green:parseFloat(savRate)>=10?C.yellow:C.red}}>{savRate}%</div>
-                  </div>
+                <div style={{fontSize:26,fontWeight:800,color:C.text,marginTop:6,lineHeight:1.2}}>
+                  {(()=>{const h=new Date().getHours(); const msg=h<12?"Good morning!":h<17?"Good afternoon!":"Good evening!"; const emoji=h<12?"☀️":h<17?"🌤":"🌙"; return <>{msg} <span style={{fontSize:22}}>{emoji}</span></>;})()}
                 </div>
               </div>
 
-              {/* Ask Chief */}
-              <button onClick={()=>setBriefing(true)} style={{width:"100%",background:C.card2,border:`1px dashed ${C.green}55`,
-                borderRadius:20,padding:18,marginBottom:16,textAlign:"left",display:"flex",alignItems:"center",gap:14}}>
-                <div style={{width:44,height:44,borderRadius:14,background:C.green+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⚡</div>
-                <div>
-                  <div style={{fontSize:14,fontWeight:700,color:C.green}}>Generate Briefing Prompt</div>
-                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>Copy → Paste in Claude.ai for full analysis</div>
-                </div>
-                <div style={{marginLeft:"auto",color:C.green,fontSize:18}}>→</div>
+              {/* Ask Chief — vibrant blue card */}
+              <button onClick={()=>setBriefing(true)} style={{width:"100%",background:C.blue,border:"none",
+                borderRadius:18,padding:20,marginBottom:16,textAlign:"left",display:"flex",flexDirection:"column",gap:10,boxShadow:C.shadowMd}}>
+                <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,.9)",letterSpacing:1}}>⚡ ASK CHIEF</div>
+                <div style={{fontSize:14,color:"rgba(255,255,255,.95)",lineHeight:1.4}}>Tap to generate your full briefing prompt — copy it and paste into Claude for a complete analysis.</div>
+                <div style={{background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 16px",alignSelf:"flex-start",fontSize:14,fontWeight:700,color:"#fff"}}>Generate Briefing →</div>
               </button>
 
-              {/* 4-grid */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+              {/* 4-grid — light pastel cards like reference */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
                 {[
-                  {l:"Monthly In",  v:`₱${fmtK(totalIncome)}`,   c:C.green,  bg:"#00F5A010"},
-                  {l:"Monthly Out", v:`₱${fmtK(totalExpenses)}`,  c:C.red,    bg:"#F8717110"},
-                  {l:"Invested",    v:`₱${fmtK(totalInvest)}`,   c:C.blue,   bg:"#3B82F610"},
-                  {l:"Saved",       v:`₱${fmtK(totalSaved)}`,    c:C.purple, bg:"#8B5CF610"},
+                  {l:"Monthly Income", v:`₱${fmt(totalIncome)}`,  icon:"💰", bg:C.greenSoft,  c:C.green},
+                  {l:"Monthly Bills",  v:`₱${fmt(totalExpenses)}`, icon:"📋", bg:C.card,       c:C.text, border:true},
+                  {l:"Net Savings",    v:`₱${fmt(totalIncome-totalExpenses)}`, icon:"🏦", bg:C.purpleSoft, c:C.purple},
+                  {l:"Tasks Open",     v:`${(s15.total-s15.done)+(s30.total-s30.done)} items`, icon:"✅", bg:C.yellowSoft, c:C.yellow},
                 ].map((s,i)=>(
-                  <div key={i} style={{background:s.bg,borderRadius:16,padding:"14px 16px",border:`1px solid ${s.c}22`}}>
-                    <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>{s.l}</div>
-                    <div style={{fontSize:20,fontWeight:800,color:s.c,fontFamily:"'Space Mono',monospace"}}>{s.v}</div>
+                  <div key={i} style={{background:s.bg,borderRadius:18,padding:16,boxShadow:s.border?C.shadow:"none",border:`1px solid ${s.border?C.border:"transparent"}`}}>
+                    <div style={{fontSize:20,marginBottom:6}}>{s.icon}</div>
+                    <div style={{fontSize:20,fontWeight:800,color:s.c,fontFamily:"'DM Sans',sans-serif"}}>{s.v}</div>
+                    <div style={{fontSize:11,color:C.muted,fontWeight:600,marginTop:4}}>{s.l}</div>
                   </div>
                 ))}
               </div>
 
               {/* Cutoff progress */}
-              <div style={{fontSize:13,fontWeight:700,color:C.muted,marginBottom:10,letterSpacing:.5}}>CUTOFF PROGRESS</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <span style={{fontSize:18}}>📅</span>
+                <span style={{fontSize:13,fontWeight:700,color:C.muted,letterSpacing:.5}}>Cutoff Progress</span>
+              </div>
               {[{key:"15th",s:s15},{key:"30th",s:s30}].map(({key,s})=>(
                 <Card key={key} style={{marginBottom:10}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
                     <span style={{fontWeight:700,color:C.text,fontSize:14}}>{co[key].label}</span>
-                    <span style={{fontSize:12,color:C.green,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{s.done}/{s.total}</span>
+                    <span style={{fontSize:12,color:C.green,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>{s.done}/{s.total} paid</span>
                   </div>
                   <ProgressBar pct={s.done/s.total}/>
-                  <div style={{fontSize:12,color:C.muted,marginTop:8,fontFamily:"'Space Mono',monospace"}}>
-                    Balance <span style={{color:C.green}}>₱{fmt(s.balance)}</span>
+                  <div style={{fontSize:12,color:C.muted,marginTop:8,fontFamily:"'DM Sans',sans-serif"}}>
+                    Budget ₱{fmt(s.budget)} · Balance <span style={{color:C.green}}>₱{fmt(s.balance)}</span>
                   </div>
                 </Card>
               ))}
 
               {/* Loans quick */}
-              <div style={{fontSize:13,fontWeight:700,color:C.muted,margin:"16px 0 10px",letterSpacing:.5}}>LOANS</div>
+              <div style={{fontSize:13,fontWeight:700,color:C.muted,margin:"16px 0 10px",letterSpacing:.5}}>📊 Loans Snapshot</div>
               {loans.map(l=>{
                 const pct=l.paid/l.total;
                 const mLeft=Math.max(0,Math.ceil((l.total-l.paid)/l.monthly));
                 const fd=new Date(); fd.setMonth(fd.getMonth()+mLeft);
                 return(
-                  <Card key={l.id} style={{marginBottom:10,border:`1px solid ${l.color}33`}}>
+                  <Card key={l.id} style={{marginBottom:10,borderLeft:`4px solid ${l.color}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
                       <div>
                         <div style={{fontSize:13,fontWeight:700,color:C.text}}>{l.name}</div>
-                        <div style={{fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>
-                          {mLeft}mo · {fd.toLocaleDateString("en-PH",{month:"short",year:"numeric"})}
+                        <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Sans',sans-serif"}}>
+                          {mLeft} months left · Freedom: {fd.toLocaleDateString("en-PH",{month:"long",year:"numeric"})}
                         </div>
                       </div>
                       <div style={{background:l.color+"22",borderRadius:12,padding:"6px 12px",textAlign:"center"}}>
-                        <div style={{fontSize:16,fontWeight:800,color:l.color,fontFamily:"'Space Mono',monospace"}}>{Math.round(pct*100)}%</div>
+                        <div style={{fontSize:16,fontWeight:800,color:l.color,fontFamily:"'DM Sans',sans-serif"}}>{Math.round(pct*100)}%</div>
                       </div>
                     </div>
                     <ProgressBar pct={pct} color={l.color} h={6}/>
@@ -635,18 +658,18 @@ export default function App() {
               })}
 
               {/* Goals quick */}
-              <div style={{fontSize:13,fontWeight:700,color:C.muted,margin:"16px 0 10px",letterSpacing:.5}}>SAVINGS GOALS</div>
+              <div style={{fontSize:13,fontWeight:700,color:C.muted,margin:"16px 0 10px",letterSpacing:.5}}>💰 Savings Goals</div>
               {goals.map(g=>(
-                <Card key={g.id} style={{marginBottom:10,border:`1px solid ${g.color}22`}}>
+                <Card key={g.id} style={{marginBottom:10,borderLeft:`4px solid ${g.color}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                     <div style={{display:"flex",gap:10,alignItems:"center"}}>
                       <span style={{fontSize:20}}>{g.icon}</span>
                       <div>
                         <div style={{fontSize:13,fontWeight:700,color:C.text}}>{g.name}</div>
-                        <div style={{fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>₱{fmt(g.current)} / ₱{fmt(g.target)}</div>
+                        <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Sans',sans-serif"}}>₱{fmt(g.current)} / ₱{fmt(g.target)}</div>
                       </div>
                     </div>
-                    <div style={{color:g.color,fontWeight:800,fontSize:14,fontFamily:"'Space Mono',monospace"}}>{Math.round(g.current/g.target*100)}%</div>
+                    <div style={{color:g.color,fontWeight:800,fontSize:14,fontFamily:"'DM Sans',sans-serif"}}>{Math.round(g.current/g.target*100)}%</div>
                   </div>
                   <ProgressBar pct={g.current/g.target} color={g.color} h={5}/>
                 </Card>
@@ -654,88 +677,85 @@ export default function App() {
             </div>
           )}
 
-          {/* ═══════ BILLS ═══════ */}
+          {/* ═══════ BILLS & PAYMENTS (screenshot style) ═══════ */}
           {tab==="bills"&&(
             <div className="anim" style={{paddingTop:20}}>
-              <div style={{fontSize:24,fontWeight:800,color:C.text,marginBottom:4}}>Bills</div>
-              <div style={{fontSize:12,color:C.muted,marginBottom:14}}>Paying a loan or savings bill auto-updates your records ✨</div>
+              <div style={{fontSize:24,fontWeight:800,color:C.text,marginBottom:4}}>Bills & Payments</div>
+              <div style={{fontSize:12,color:C.muted,marginBottom:14}}>Tap ✓ to mark paid · ✏️ to edit · × to delete</div>
 
-              {/* Toggle */}
-              <div style={{display:"flex",background:C.card,borderRadius:14,padding:4,marginBottom:16,border:`1px solid ${C.border}`}}>
+              {/* Month selector */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                <button onClick={()=>setBillMonth(prevMonthKey(billMonth))} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",fontSize:13,fontWeight:600,color:C.text,boxShadow:C.shadow}}>← Prev</button>
+                <div style={{fontSize:14,fontWeight:700,color:C.muted,fontFamily:"'DM Sans',sans-serif"}}>{monthLabel(billMonth)}</div>
+                <button onClick={()=>setConfirmNextMonth({fromMonthKey:billMonth})} style={{background:C.blue,border:"none",borderRadius:12,padding:"8px 14px",fontSize:13,fontWeight:600,color:"#fff",boxShadow:C.shadow}}>Next →</button>
+              </div>
+
+              {/* Cutoff selector — pill buttons */}
+              <div style={{display:"flex",background:C.card,borderRadius:14,padding:4,marginBottom:16,border:`1px solid ${C.border}`,boxShadow:C.shadow}}>
                 {["15th","30th"].map(k=>(
                   <button key={k} onClick={()=>setCoTab(k)} style={{flex:1,padding:"10px",borderRadius:10,border:"none",
-                    background:coTab===k?C.green:"transparent",color:coTab===k?C.bg:C.muted,
+                    background:coTab===k?C.blue:"transparent",color:coTab===k?"#fff":C.muted,
                     fontSize:14,fontWeight:700,transition:"all .2s"}}>{k} Cutoff</button>
                 ))}
               </div>
 
               {(()=>{
-                const c=co[coTab]; const p=pay[coTab]||{}; const s=stats(coTab);
+                const monthPay = getPayForMonth(pay, billMonth);
+                const c=co[coTab]; const p=monthPay[coTab]||{}; const s=stats(coTab, billMonth);
                 return(<>
-                  {/* Income header */}
-                  <div style={{background:`linear-gradient(135deg,#0D2137,#0A1628)`,borderRadius:20,padding:20,
-                    marginBottom:14,border:`1px solid ${C.green}33`}}>
+                  {/* Salary card — solid blue, white text (screenshot) */}
+                  <div style={{background:C.blue,borderRadius:18,padding:20,marginBottom:16,boxShadow:C.shadowMd}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                       <div>
-                        <div style={{fontSize:10,color:C.muted,letterSpacing:1,fontFamily:"'Space Mono',monospace"}}>SALARY IN</div>
-                        <div style={{fontSize:28,fontWeight:800,color:C.green,fontFamily:"'Space Mono',monospace",marginTop:2}}>₱{fmt(c.income)}</div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,.9)",letterSpacing:1,fontFamily:"'DM Sans',sans-serif"}}>SALARY IN</div>
+                        <div style={{fontSize:28,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif",marginTop:2}}>₱{fmt(c.income)}</div>
                       </div>
                       <button onClick={()=>{setEditIncome(coTab);setIncomeVal(c.income.toString())}}
-                        style={{background:C.card2,border:`1px solid ${C.border}`,borderRadius:12,padding:"7px 14px",color:C.muted,fontSize:12,fontWeight:700}}>✏️ Edit</button>
+                        style={{background:"rgba(255,255,255,.25)",border:"none",borderRadius:20,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:600}}>✏️ Edit</button>
                     </div>
-                    <div style={{display:"flex",gap:14,marginTop:16}}>
-                      {[{l:"BUDGET",v:`₱${fmt(s.budget)}`},{l:"PAID",v:`₱${fmt(s.paidTot)}`,c:C.green},{l:"BALANCE",v:`₱${fmt(s.balance)}`,c:C.green}].map((x,i)=>(
+                    <div style={{display:"flex",gap:20,marginTop:18}}>
+                      {[{l:"BUDGET",v:`₱${fmt(s.budget)}`},{l:"PAID",v:`₱${fmt(s.paidTot)}`},{l:"BALANCE",v:`₱${fmt(s.balance)}`}].map((x,i)=>(
                         <div key={i}>
-                          <div style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{x.l}</div>
-                          <div style={{fontSize:14,fontWeight:700,color:x.c||C.text,fontFamily:"'Space Mono',monospace"}}>{x.v}</div>
+                          <div style={{fontSize:9,color:"rgba(255,255,255,.85)",fontFamily:"'DM Sans',sans-serif"}}>{x.l}</div>
+                          <div style={{fontSize:14,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>{x.v}</div>
                         </div>
                       ))}
                     </div>
-                    <div style={{background:`${C.green}22`,borderRadius:99,height:6,marginTop:14,overflow:"hidden"}}>
-                      <div style={{background:C.green,height:"100%",width:`${(s.done/s.total)*100}%`,borderRadius:99,transition:"width .5s"}}/>
+                    <div style={{background:"rgba(255,255,255,.25)",borderRadius:99,height:6,marginTop:14,overflow:"hidden"}}>
+                      <div style={{background:"#fff",height:"100%",width:`${(s.done/s.total)*100}%`,borderRadius:99,transition:"width .5s"}}/>
                     </div>
-                    <div style={{fontSize:10,color:C.muted,marginTop:6,fontFamily:"'Space Mono',monospace"}}>{s.done} / {s.total} paid</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,.9)",marginTop:8,fontFamily:"'DM Sans',sans-serif"}}>{s.done} of {s.total} items paid</div>
                   </div>
 
-                  {/* Bill items */}
+                  {/* Bill items — white cards, hollow circle, yellow pencil, red × */}
                   {c.items.map(item=>{
                     const pd=p[item.id];
-                    // find linked loan/goal name
                     const linkedLoan  = item.loanLink?loans.find(l=>l.id===item.loanLink):null;
                     const linkedGoal  = item.goalLink?goals.find(g=>g.id===item.goalLink):null;
                     return(
                       <div key={item.id} style={{background:C.card,borderRadius:16,padding:"14px 16px",marginBottom:10,
-                        border:`1px solid ${pd?.done?C.green+"44":C.border}`,transition:"border .3s"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        border:`1px solid ${C.border}`,boxShadow:C.shadow}}>
+                        <div style={{display:"flex",alignItems:"center",gap:12}}>
                           <div onClick={()=>{
                             if(pd?.done)unmark(coTab,item.id);
                             else{setPaidModal({key:coTab,item});setPaidAmt(item.budget.toString());setPaidDate(new Date().toISOString().split("T")[0])}
-                          }} style={{width:28,height:28,borderRadius:"50%",border:`2.5px solid ${pd?.done?C.green:C.border}`,
-                            background:pd?.done?C.green+"22":"transparent",display:"flex",alignItems:"center",
+                          }} style={{width:28,height:28,borderRadius:"50%",border:`2px solid ${pd?.done?C.green:C.border}`,
+                            background:pd?.done?C.green:"transparent",display:"flex",alignItems:"center",
                             justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
-                            {pd?.done&&<span style={{fontSize:14,color:C.green,fontWeight:800}}>✓</span>}
+                            {pd?.done&&<span style={{fontSize:14,color:"#fff",fontWeight:800}}>✓</span>}
                           </div>
                           <span style={{fontSize:18}}>{catIco(item.cat)}</span>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
-                            {pd?.done&&<div style={{fontSize:10,color:C.green,fontFamily:"'Space Mono',monospace"}}>✓ ₱{fmt(pd.amount)} · {pd.date}</div>}
-                            {/* Auto-sync indicator */}
-                            {(linkedLoan||linkedGoal)&&!pd?.done&&(
-                              <div style={{fontSize:10,color:C.blue}}>
-                                🔗 auto-syncs → {linkedLoan?linkedLoan.name:linkedGoal?.name}
-                              </div>
-                            )}
-                            {(linkedLoan||linkedGoal)&&pd?.done&&(
-                              <div style={{fontSize:10,color:C.green}}>
-                                ✅ synced → {linkedLoan?linkedLoan.name:linkedGoal?.name}
-                              </div>
-                            )}
+                            <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
+                            {pd?.done&&<div style={{fontSize:10,color:C.green,fontFamily:"'DM Sans',sans-serif"}}>✓ ₱{fmt(pd.amount)} · {pd.date}</div>}
+                            {(linkedLoan||linkedGoal)&&!pd?.done&&<div style={{fontSize:10,color:C.blue}}>🔗 → {linkedLoan?linkedLoan.name:linkedGoal?.name}</div>}
+                            {(linkedLoan||linkedGoal)&&pd?.done&&<div style={{fontSize:10,color:C.green}}>✅ synced</div>}
                           </div>
-                          <div style={{fontWeight:700,fontSize:14,color:pd?.done?C.green:C.text,flexShrink:0,fontFamily:"'Space Mono',monospace"}}>₱{fmt(item.budget)}</div>
+                          <div style={{fontWeight:700,fontSize:14,color:C.text,flexShrink:0,fontFamily:"'DM Sans',sans-serif"}}>₱{fmt(item.budget)}</div>
                           <button onClick={()=>{setBillModal({mode:"edit",key:coTab});setBillForm({...item,budget:item.budget.toString()})}}
-                            style={{background:C.card2,border:"none",borderRadius:8,width:28,height:28,fontSize:12,flexShrink:0}}>✏️</button>
+                            style={{background:"transparent",border:"none",borderRadius:8,width:32,height:32,fontSize:16,flexShrink:0,padding:0}} title="Edit">✏️</button>
                           <button onClick={()=>deleteBill(coTab,item.id)}
-                            style={{background:C.red+"22",border:"none",borderRadius:8,width:28,height:28,fontSize:12,color:C.red,flexShrink:0}}>✕</button>
+                            style={{background:"transparent",border:"none",borderRadius:8,width:32,height:32,fontSize:16,color:C.red,flexShrink:0,padding:0,fontWeight:700}} title="Delete">×</button>
                         </div>
                       </div>
                     );
@@ -748,29 +768,34 @@ export default function App() {
                   {/* Total row */}
                   <div style={{background:C.card2,borderRadius:16,padding:"14px 20px",display:"flex",justifyContent:"space-between",
                     border:`1px solid ${C.border}`,marginBottom:14}}>
-                    <span style={{color:C.text,fontWeight:800,fontSize:15,fontFamily:"'Space Mono',monospace"}}>TOTAL</span>
+                    <span style={{color:C.text,fontWeight:800,fontSize:15,fontFamily:"'DM Sans',sans-serif"}}>TOTAL</span>
                     <div style={{textAlign:"right"}}>
-                      <div style={{color:C.text,fontWeight:800,fontSize:18,fontFamily:"'Space Mono',monospace"}}>₱{fmt(s.budget)}</div>
+                      <div style={{color:C.text,fontWeight:800,fontSize:18,fontFamily:"'DM Sans',sans-serif"}}>₱{fmt(s.budget)}</div>
                       <div style={{color:C.muted,fontSize:10}}>{s.done}/{s.total} done</div>
                     </div>
                   </div>
 
-                  {/* Savings summary */}
-                  <div style={{background:`${C.green}0D`,borderRadius:18,padding:18,border:`1px solid ${C.green}22`}}>
-                    <div style={{fontSize:12,fontWeight:800,color:C.green,marginBottom:12,fontFamily:"'Space Mono',monospace"}}>CUTOFF SUMMARY</div>
+                  {/* Savings summary — light (for this month) */}
+                  {(()=>{
+                    const s15m=stats("15th",billMonth), s30m=stats("30th",billMonth);
+                    return (
+                    <div style={{background:C.greenSoft,borderRadius:18,padding:18,border:`1px solid ${C.green}33`,boxShadow:C.shadow}}>
+                    <div style={{fontSize:12,fontWeight:800,color:C.green,marginBottom:12,fontFamily:"'DM Sans',sans-serif"}}>CUTOFF SUMMARY — {monthLabel(billMonth)}</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                       {[
-                        {l:"15th Net",  v:`₱${fmtK(co["15th"].income-s15.budget)}`},
-                        {l:"30th Net",  v:`₱${fmtK(co["30th"].income-s30.budget)}`},
-                        {l:"Monthly Net",v:`₱${fmtK(totalIncome-totalExpenses)}`},
+                        {l:"15th Net",  v:fmtK(co["15th"].income-s15m.budget)},
+                        {l:"30th Net",  v:fmtK(co["30th"].income-s30m.budget)},
+                        {l:"Monthly Net",v:fmtK(totalIncome-totalExpenses)},
                       ].map((r,i)=>(
-                        <div key={i} style={{background:C.card,borderRadius:12,padding:"10px 12px",textAlign:"center",border:`1px solid ${C.border}`}}>
+                        <div key={i} style={{background:C.card,borderRadius:12,padding:"10px 12px",textAlign:"center",border:`1px solid ${C.border}`,boxShadow:C.shadow}}>
                           <div style={{fontSize:9,color:C.muted}}>{r.l}</div>
-                          <div style={{fontSize:14,fontWeight:700,color:C.green,fontFamily:"'Space Mono',monospace"}}>{r.v}</div>
+                          <div style={{fontSize:14,fontWeight:700,color:C.green,fontFamily:"'DM Sans',sans-serif"}}>{r.v}</div>
                         </div>
                       ))}
                     </div>
                   </div>
+                    );
+                  })()}
                 </>);
               })()}
             </div>
@@ -786,14 +811,14 @@ export default function App() {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div style={{fontSize:13,fontWeight:700,color:C.muted,letterSpacing:.5}}>GOALS</div>
                 <button onClick={()=>{setGoalModal("new");setGoalForm({name:"",target:"",current:"0",icon:"🎯",color:C.green})}}
-                  style={{background:C.green,border:"none",borderRadius:20,padding:"7px 16px",color:C.bg,fontSize:12,fontWeight:800}}>+ Add Goal</button>
+                  style={{background:C.blue,border:"none",borderRadius:20,padding:"7px 16px",color:"#fff",fontSize:12,fontWeight:700}}>+ Add Goal</button>
               </div>
 
               {/* Total saved */}
-              <Card style={{marginBottom:14,border:`1px solid ${C.green}33`,background:`linear-gradient(135deg,${C.card},#0D2137)`}}>
-                <div style={{fontSize:10,color:C.green,letterSpacing:2,fontFamily:"'Space Mono',monospace"}}>TOTAL SAVED</div>
-                <div style={{fontSize:32,fontWeight:800,color:C.green,fontFamily:"'Space Mono',monospace",marginTop:4}}>₱{fmt(totalSaved)}</div>
-                <div style={{fontSize:12,color:C.muted,marginTop:4}}>across {goals.length} goals</div>
+              <Card style={{marginBottom:14,border:`1px solid ${C.green}33`,background:C.greenSoft}}>
+                <div style={{fontSize:11,color:C.green,letterSpacing:1,fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>TOTAL SAVED</div>
+                <div style={{fontSize:32,fontWeight:800,color:C.green,fontFamily:"'DM Sans',sans-serif",marginTop:4}}>₱{fmt(totalSaved)}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>across {goals.length} goals</div>
               </Card>
 
               {goals.map(g=>{
@@ -807,13 +832,13 @@ export default function App() {
                       <div style={{display:"flex",gap:10,alignItems:"center"}}>
                         <span style={{fontSize:26}}>{g.icon}</span>
                         <div>
-                          <div style={{fontSize:14,fontWeight:700,color:C.text}}>{g.name}</div>
-                          <div style={{fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>₱{fmt(g.current)} / ₱{fmt(g.target)}</div>
+                          <div style={{fontSize:14,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{g.name}</div>
+                          <div style={{fontSize:12,color:C.muted,fontFamily:"'DM Sans',sans-serif"}}>₱{fmt(g.current)} / ₱{fmt(g.target)}</div>
                         </div>
                       </div>
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
                         <div style={{background:g.color+"22",borderRadius:10,padding:"5px 10px",
-                          fontSize:13,fontWeight:800,color:g.color,fontFamily:"'Space Mono',monospace"}}>{Math.round(pct*100)}%</div>
+                          fontSize:13,fontWeight:800,color:g.color,fontFamily:"'DM Sans',sans-serif"}}>{Math.round(pct*100)}%</div>
                         <button onClick={()=>{setGoalModal(g.id);setGoalForm({...g,target:g.target.toString(),current:g.current.toString()})}}
                           style={{background:C.card2,border:"none",borderRadius:10,width:30,height:30,fontSize:13}}>✏️</button>
                       </div>
@@ -847,13 +872,13 @@ export default function App() {
                 return(
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
                     {[
-                      {l:"Avg/Month",v:`₱${fmtK(avgSaved)}`,c:C.green},
-                      {l:"Total Ever",v:`₱${fmtK(totalEver)}`,c:C.blue},
+                      {l:"Avg/Month",v:fmtK(avgSaved),c:C.green},
+                      {l:"Total Ever",v:fmtK(totalEver),c:C.blue},
                       {l:"Best Month",v:best.month.split(" ")[0],c:C.purple},
                     ].map((s,i)=>(
                       <div key={i} style={{background:s.c+"11",borderRadius:14,padding:"12px 14px",border:`1px solid ${s.c}22`}}>
-                        <div style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{s.l}</div>
-                        <div style={{fontSize:15,fontWeight:800,color:s.c,fontFamily:"'Space Mono',monospace",marginTop:2}}>{s.v}</div>
+                        <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Sans',sans-serif",fontWeight:500}}>{s.l}</div>
+                        <div style={{fontSize:16,fontWeight:700,color:s.c,fontFamily:"'DM Sans',sans-serif",marginTop:4}}>{s.v}</div>
                       </div>
                     ))}
                   </div>
@@ -866,12 +891,12 @@ export default function App() {
                   display:"flex",alignItems:"center",gap:10,border:`1px solid ${C.border}`}}>
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,fontWeight:700,color:C.text}}>{h.month}</div>
-                    <div style={{fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>
+                    <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Sans',sans-serif"}}>
                       In ₱{fmt(h.income)} · Out ₱{fmt(h.expenses)}
                     </div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:15,fontWeight:800,color:h.saved>=0?C.green:C.red,fontFamily:"'Space Mono',monospace"}}>
+                    <div style={{fontSize:15,fontWeight:700,color:h.saved>=0?C.green:C.red,fontFamily:"'DM Sans',sans-serif"}}>
                       {h.saved>=0?"+":""}{fmtK(h.saved)}
                     </div>
                     <div style={{fontSize:10,color:C.muted}}>{h.income>0?(h.saved/h.income*100).toFixed(0):0}% rate</div>
@@ -894,9 +919,9 @@ export default function App() {
               <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Payments via Bills auto-update here 🔗</div>
 
               {/* Total debt */}
-              <Card style={{marginBottom:16,border:`1px solid ${C.red}33`,background:`linear-gradient(135deg,${C.card},#1A0D1E)`}}>
-                <div style={{fontSize:10,color:C.red,letterSpacing:2,fontFamily:"'Space Mono',monospace"}}>TOTAL DEBT REMAINING</div>
-                <div style={{fontSize:30,fontWeight:800,color:C.red,fontFamily:"'Space Mono',monospace",marginTop:4}}>₱{fmt(totalDebt)}</div>
+              <Card style={{marginBottom:16,border:`1px solid ${C.red}33`,background:C.redSoft}}>
+                <div style={{fontSize:10,color:C.red,letterSpacing:2,fontFamily:"'DM Sans',sans-serif"}}>TOTAL DEBT REMAINING</div>
+                <div style={{fontSize:30,fontWeight:800,color:C.red,fontFamily:"'DM Sans',sans-serif",marginTop:4}}>₱{fmt(totalDebt)}</div>
                 <div style={{fontSize:12,color:C.muted,marginTop:4}}>
                   {loans.reduce((s,l)=>s+l.monthly,0).toLocaleString()} / month in payments
                 </div>
@@ -914,12 +939,12 @@ export default function App() {
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                       <div>
                         <div style={{fontSize:16,fontWeight:800,color:C.text}}>{l.name}</div>
-                        <div style={{fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>₱{fmt(l.monthly)}/month</div>
+                        <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Sans',sans-serif"}}>₱{fmt(l.monthly)}/month</div>
                         {l.notes&&<div style={{fontSize:11,color:C.muted}}>{l.notes}</div>}
                       </div>
                       <div style={{display:"flex",gap:6}}>
                         <div style={{background:l.color+"22",borderRadius:12,padding:"6px 12px",textAlign:"center"}}>
-                          <div style={{fontSize:18,fontWeight:800,color:l.color,fontFamily:"'Space Mono',monospace"}}>{Math.round(pct*100)}%</div>
+                          <div style={{fontSize:18,fontWeight:800,color:l.color,fontFamily:"'DM Sans',sans-serif"}}>{Math.round(pct*100)}%</div>
                           <div style={{fontSize:9,color:l.color}}>PAID</div>
                         </div>
                         <button onClick={()=>{setLoanModal(l.id);setLoanForm({...l,total:l.total.toString(),monthly:l.monthly.toString(),paid:l.paid.toString()})}}
@@ -934,7 +959,7 @@ export default function App() {
                         {l:"Left",v:fmtK(rem),c:C.red},
                       ].map((s,i)=>(
                         <div key={i} style={{background:C.card2,borderRadius:12,padding:"10px 12px",textAlign:"center",border:`1px solid ${C.border}`}}>
-                          <div style={{fontSize:14,fontWeight:800,color:s.c||C.text,fontFamily:"'Space Mono',monospace"}}>{s.v}</div>
+                          <div style={{fontSize:14,fontWeight:800,color:s.c||C.text,fontFamily:"'DM Sans',sans-serif"}}>{s.v}</div>
                           <div style={{fontSize:10,color:C.muted}}>{s.l}</div>
                         </div>
                       ))}
@@ -943,12 +968,12 @@ export default function App() {
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <div>
                           <div style={{fontSize:10,color:C.muted}}>Months paid</div>
-                          <div style={{fontSize:22,fontWeight:800,color:l.color,fontFamily:"'Space Mono',monospace"}}>{mDone}<span style={{fontSize:13,color:C.muted}}> / {mTotal}</span></div>
+                          <div style={{fontSize:22,fontWeight:800,color:l.color,fontFamily:"'DM Sans',sans-serif"}}>{mDone}<span style={{fontSize:13,color:C.muted}}> / {mTotal}</span></div>
                         </div>
                         <div style={{textAlign:"right"}}>
                           <div style={{fontSize:10,color:C.muted}}>🎉 Freedom Date</div>
                           <div style={{fontSize:15,fontWeight:800,color:C.text}}>{fd.toLocaleDateString("en-PH",{month:"long",year:"numeric"})}</div>
-                          <div style={{fontSize:11,color:l.color,fontFamily:"'Space Mono',monospace"}}>{mLeft} months left</div>
+                          <div style={{fontSize:11,color:l.color,fontFamily:"'DM Sans',sans-serif"}}>{mLeft} months left</div>
                         </div>
                       </div>
                     </div>
@@ -972,17 +997,16 @@ export default function App() {
               <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Track your portfolio · Learn where to put your money</div>
 
               {/* Portfolio total */}
-              <div style={{background:`linear-gradient(135deg,#0A1628,#0D1F3C)`,borderRadius:24,padding:22,
-                marginBottom:16,border:`1px solid ${C.blue}33`}}>
-                <div style={{fontSize:10,color:C.blue,letterSpacing:2,fontFamily:"'Space Mono',monospace"}}>TOTAL PORTFOLIO</div>
-                <div style={{fontSize:34,fontWeight:800,color:C.text,fontFamily:"'Space Mono',monospace",marginTop:4}}>₱{fmt(totalInvest)}</div>
+              <div style={{background:C.blueSoft,borderRadius:24,padding:22,border:`1px solid ${C.blue}33`,marginBottom:16,boxShadow:C.shadow}}>
+                <div style={{fontSize:10,color:C.blue,letterSpacing:2,fontFamily:"'DM Sans',sans-serif"}}>TOTAL PORTFOLIO</div>
+                <div style={{fontSize:34,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",marginTop:4}}>₱{fmt(totalInvest)}</div>
                 {(()=>{
                   const totalIn=invest.reduce((s,i)=>s+i.invested,0);
                   const gain=totalInvest-totalIn;
                   const gainPct=totalIn>0?(gain/totalIn*100):0;
                   return(
                     <div style={{marginTop:10}}>
-                      <span style={{fontSize:12,color:gainPct>=0?C.green:C.red,fontFamily:"'Space Mono',monospace",fontWeight:700}}>
+                      <span style={{fontSize:12,color:gainPct>=0?C.green:C.red,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>
                         {gainPct>=0?"+":""}{gainPct.toFixed(1)}% ({gainPct>=0?"+":""}₱{fmt(Math.abs(gain))})
                       </span>
                       <span style={{fontSize:11,color:C.muted,marginLeft:8}}>total return</span>
@@ -1029,7 +1053,7 @@ export default function App() {
                         {l:"Return",v:`${gainPct>=0?"+":""}${gainPct.toFixed(1)}%`,c:gainPct>=0?C.green:C.red},
                       ].map((s,j)=>(
                         <div key={j} style={{background:C.card2,borderRadius:12,padding:"10px 12px",textAlign:"center",border:`1px solid ${C.border}`}}>
-                          <div style={{fontSize:12,fontWeight:700,color:s.c||C.text,fontFamily:"'Space Mono',monospace"}}>{s.v}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:s.c||C.text,fontFamily:"'DM Sans',sans-serif"}}>{s.v}</div>
                           <div style={{fontSize:9,color:C.muted}}>{s.l}</div>
                         </div>
                       ))}
@@ -1083,21 +1107,21 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── TAB BAR ── */}
-      <div style={{background:C.card,borderTop:`1px solid ${C.border}`,padding:"8px 0 24px",
-        display:"flex",justifyContent:"space-around",flexShrink:0}}>
+      {/* ── TAB BAR (light, blue active) ── */}
+      <div style={{background:C.card,borderTop:`1px solid ${C.border}`,padding:"10px 0 24px",
+        display:"flex",justifyContent:"space-around",flexShrink:0,boxShadow:"0 -2px 12px rgba(0,0,0,.04)"}}>
         {[
-          {id:"home",   emoji:"⚡",label:"Home"},
+          {id:"home",   emoji:"🏠",label:"Home"},
           {id:"bills",  emoji:"📅",label:"Bills"},
           {id:"savings",emoji:"💚",label:"Savings"},
-          {id:"loans",  emoji:"🏦",label:"Loans"},
+          {id:"loans",  emoji:"📊",label:"Loans"},
           {id:"invest", emoji:"📈",label:"Invest"},
         ].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,background:"none",border:"none",
-            display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 0"}}>
-            {tab===t.id&&<div style={{position:"absolute",marginTop:-8,width:24,height:3,background:C.green,borderRadius:3}}/>}
-            <div style={{fontSize:20,filter:tab===t.id?"none":"grayscale(1)",opacity:tab===t.id?1:.4}}>{t.emoji}</div>
-            <div style={{fontSize:10,color:tab===t.id?C.green:C.muted,fontWeight:tab===t.id?700:500}}>{t.label}</div>
+            display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"6px 0",position:"relative"}}>
+            {tab===t.id&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:28,height:3,background:C.blue,borderRadius:3}}/>}
+            <div style={{fontSize:22,opacity:tab===t.id?1:.5}}>{t.emoji}</div>
+            <div style={{fontSize:10,color:tab===t.id?C.blue:C.muted,fontWeight:tab===t.id?700:500,textDecoration:tab===t.id?"underline":undefined,textUnderlineOffset:2}}>{t.label}</div>
           </button>
         ))}
       </div>
@@ -1143,16 +1167,29 @@ export default function App() {
         <Modal onClose={()=>setBriefing(false)} title="⚡ Chief Briefing">
           <div style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.6}}>Copy → Paste into <strong style={{color:C.text}}>Claude.ai</strong></div>
           <div style={{background:C.bg,borderRadius:14,padding:14,marginBottom:14,maxHeight:300,overflowY:"auto",border:`1px solid ${C.border}`}}>
-            <pre style={{fontSize:11,color:C.muted,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Space Mono',monospace"}}>{promptText}</pre>
+            <pre style={{fontSize:11,color:C.muted,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'DM Sans',sans-serif"}}>{promptText}</pre>
           </div>
           <button onClick={copyPrompt} style={{width:"100%",padding:16,borderRadius:14,border:"none",
-            background:copied?C.green2:C.green,color:C.bg,fontSize:14,fontWeight:800,marginBottom:10,transition:"background .3s"}}>
+            background:copied?C.green2:C.green,color:"#fff",fontSize:14,fontWeight:700,marginBottom:10,transition:"background .3s"}}>
             {copied?"✅ Copied!":"📋 Copy Full Briefing"}
           </button>
         </Modal>
       )}
 
       {/* ══ MARK PAID ══ */}
+      {/* ── Done with bills this month? (before next month) ── */}
+      {confirmNextMonth&&(
+        <Modal onClose={()=>setConfirmNextMonth(null)} title="📅 Move to next month?">
+          <div style={{fontSize:14,color:C.text,marginBottom:16,lineHeight:1.5}}>
+            Are you done with your bills for <strong>{monthLabel(confirmNextMonth.fromMonthKey)}</strong>?
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={()=>{setConfirmNextMonth(null)}} style={{flex:1,padding:14,borderRadius:14,border:`1.5px solid ${C.border}`,background:"transparent",color:C.muted,fontSize:14,fontWeight:700}}>No, go back</button>
+            <button onClick={()=>{setBillMonth(nextMonthKey(confirmNextMonth.fromMonthKey));setConfirmNextMonth(null)}} style={{flex:1,padding:14,borderRadius:14,border:"none",background:C.blue,color:"#fff",fontSize:14,fontWeight:700}}>Yes, move on</button>
+          </div>
+        </Modal>
+      )}
+
       {paidModal&&(
         <Modal onClose={()=>setPaidModal(null)} title={`💳 Mark Paid — ${paidModal.item.name}`}>
           {(paidModal.item.cat==="loan"&&paidModal.item.loanLink||paidModal.item.cat==="savings"&&paidModal.item.goalLink)&&(
