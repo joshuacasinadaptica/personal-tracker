@@ -1,0 +1,13 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; font-family: 'DM Sans', -apple-system, sans-serif; background: #F0F4FF; -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { display: none; }
+* { -ms-overflow-style: none; scrollbar-width: none; }
+input, button, textarea, select { font-family: inherit; -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:active { opacity: 0.8; transform: scale(0.97); }
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+@keyframes fadeSlide { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+@keyframes slideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+@keyframes pulse { 0%,100% { opacity:.4; transform:scale(.85); } 50% { opacity:1; transform:scale(1); } }
+.anim { animation: fadeSlide .28s ease both; }
+.modal-sheet { animation: slideUp .3s cubic-bezier(.32,1.2,.64,1) both; }
