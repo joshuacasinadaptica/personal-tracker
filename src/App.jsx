@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 
+// ── RESPONSIVE: mobile vs iPad/desktop (one breakpoint) ────────────────────────
+function useViewport() {
+  const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    onResize();
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return { isMobile: vw < 768, isLarge: vw >= 768, width: vw };
+}
+
 // ── CONSTANTS (light & lively) ────────────────────────────────────────────────
 const C = {
   bg:"#F0F4FF", card:"#FFFFFF", card2:"#F1F5F9", border:"#E2E8F0",
@@ -401,6 +413,7 @@ function buildPrompt(co,pay,loans,goals,invest,savHist) {
 
 // ── APP ───────────────────────────────────────────────────────────────────────
 export default function App() {
+  const viewport = useViewport();
   const [tab,setTab]     = useState("home");
   const [co,setCo]       = useState(()=>load("cutoffs",DEF_CUTOFFS));
   const [pay,setPay]     = useState(()=>migratePayToMonthKeyed(load("payments",null))||{[getMonthKey()]:DEF_PAY});
@@ -547,10 +560,14 @@ export default function App() {
 
   const criticalTips = tips.filter(t=>t.type==="critical"||t.type==="urgent").length;
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
+  // ── RENDER (responsive: mobile full width; iPad/desktop same centered card) ──
+  const appMaxWidth = viewport.isMobile ? "100%" : 460;
   return (
-    <div style={{maxWidth:430,margin:"0 auto",height:"100vh",display:"flex",flexDirection:"column",
-      background:C.bg,overflow:"hidden",position:"relative"}}>
+    <div className="app-root" style={{
+      width:"100%",maxWidth:appMaxWidth,margin:"0 auto",minHeight:"100vh",height:"100vh",display:"flex",flexDirection:"column",
+      background:C.bg,overflow:"hidden",position:"relative",
+      ...(viewport.isLarge && {boxShadow:"0 0 0 1px rgba(0,0,0,.06), 0 24px 48px rgba(0,0,0,.08)",borderRadius:12}),
+    }}>
 
       {/* Header — time | chief (yellow bolt, black text) | date */}
       <div style={{background:C.card,padding:"14px 20px 12px",display:"flex",justifyContent:"space-between",

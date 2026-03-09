@@ -15,6 +15,13 @@
   --accent:#1A56DB;
 }
 html,body,#root{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);-webkit-font-smoothing:antialiased;color:var(--text)}
+/* Responsive: mobile full-bleed; iPad & desktop = same centered card */
+.app-root{box-sizing:border-box}
+@media (min-width:768px){
+  body{background:#E2E8F0}
+  #root{display:flex;justify-content:center;align-items:flex-start;padding:24px 0 48px}
+  .app-root{min-height:calc(100vh - 72px);height:auto}
+}
 ::-webkit-scrollbar{display:none}
 *{-ms-overflow-style:none;scrollbar-width:none}
 input,button,textarea,select{font-family:inherit;-webkit-tap-highlight-color:transparent;color:var(--text)}
