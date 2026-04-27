@@ -96,10 +96,12 @@ function LocalAuthScreen({ onUnlocked }) {
             flex:1,border:"none",borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:700,
             background:mode==="login"?C.blue:C.card2,color:mode==="login"?"#fff":C.muted
           }}>Unlock</button>
-          <button onClick={()=>{setMode("register");setMsg(null)}} style={{
-            flex:1,border:"none",borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:700,
-            background:mode==="register"?C.blue:C.card2,color:mode==="register"?"#fff":C.muted
-          }}>Set password</button>
+          {!hasAccount && (
+            <button onClick={()=>{setMode("register");setMsg(null)}} style={{
+              flex:1,border:"none",borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:700,
+              background:mode==="register"?C.blue:C.card2,color:mode==="register"?"#fff":C.muted
+            }}>Set password</button>
+          )}
         </div>
 
         {msg && (
